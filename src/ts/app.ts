@@ -22,9 +22,12 @@ import * as util from "util";
  * Contains the main application logic.
  */
 export default class App {
+    private _nsapi?: NsApi;
     private _nstg?: NsTgApi;
+    private _verbose: boolean;
     private _cancel: boolean;
     private _pause: boolean;
+    private _shutdown: boolean;
     private _jobId: string;
 
     /**
@@ -55,51 +58,28 @@ export default class App {
                        telegramType: TelegramType, dryRun: boolean,
                        refresh: boolean, verbose: boolean): Promise<void> {
         this.reset();
+        this._verbose = verbose;
 
-        const nsapi = new NsApi(
+        this._nsapi = new NsApi(
             `nstg-web (maintained by Auralia, currently`
             + ` used by "${userAgent}")`,
             true);
-        this._nstg = new NsTgApi(nsapi, clientKey);
+        this._nstg = new NsTgApi(this._nsapi, clientKey);
 
+        this._nstg.onJobStart = jobId => {
+            this.onJobStart(jobId);
+        };
         this._nstg.onJobComplete = () => {
-            if (this._cancel) {
-                Ui.log("info", "Process cancelled.");
-            } else {
-                Ui.log("info", "Process complete.");
-            }
-
-            if (typeof this._nstg !== "undefined") {
-                this._nstg.cleanup();
-            }
-            nsapi.cleanup();
-
-            Ui.handleFinish();
+            this.onJobComplete();
         };
-        this._nstg.onJobStart = (jobId: string) => {
-            if (typeof this._nstg !== "undefined") {
-                const job = this._nstg.getJob(jobId);
-                if (typeof job !== "undefined") {
-                    Ui.log(
-                        "info",
-                        `Sending telegrams to the following nations:`
-                        + ` ${job.recipients.map(r => r.nation)}`);
-                } else {
-                    Ui.log("error", "Failed to identify telegram recipients");
-                }
-            } else {
-                Ui.log("error", "Internal error");
-            }
+        this._nstg.onTgSuccess = recipient => {
+            App.onTgSuccess(recipient);
         };
-        this._nstg.onTgFailure = (recipient: Recipient) => {
-            Ui.log("error", `Failed to send telegram to ${recipient.nation}`);
-            if (verbose) {
-                Ui.log("error", util.inspect(recipient.status.err));
-            }
+        this._nstg.onTgFailure = recipient => {
+            this.onTgFailure(recipient);
         };
-        this._nstg.onTgSuccess = (recipient: Recipient) => {
-            Ui.log("info", `Sent telegram to ${recipient.nation}`);
-            Ui.handleTgSuccess(recipient.nation);
+        this._nstg.onNewRecipients = (_, recipients) => {
+            App.onNewRecipients(recipients);
         };
 
         Ui.log("info", "Evaluating Template Recipient Language string...");
@@ -116,11 +96,82 @@ export default class App {
                 refresh,
                 undefined,
                 dryRun);
-            Ui.log("info", "Sending telegrams...");
         } catch (err) {
             Ui.log("error", `Failed to evaluate Template Recipient Language`
                             + ` string: ${err.message}`);
+            this.onJobComplete();
         }
+    }
+
+    private onJobStart(jobId: string) {
+        if (typeof this._nstg !== "undefined") {
+            const job = this._nstg.getJob(jobId);
+            if (typeof job !== "undefined") {
+                if (job.refresh) {
+                    Ui.log("info", "Continuous mode");
+                    if (job.recipients.length > 0) {
+                        Ui.log(
+                            "info",
+                            `Initially sending telegrams to the following`
+                            + ` nations:`
+                            + ` ${job.recipients.map(r => r.nation)}`);
+                    } else {
+                        Ui.log("info", "Waiting to send telegrams...");
+                    }
+                } else {
+                    Ui.log(
+                        "info",
+                        `Sending telegrams to the following nations:`
+                        + ` ${job.recipients.map(r => r.nation)}`);
+                }
+            } else {
+                Ui.log("error", "Failed to identify telegram recipients.");
+                this.onJobComplete();
+            }
+        } else {
+            Ui.log("error", "Internal error.");
+            this.onJobComplete();
+        }
+    }
+
+    private onJobComplete() {
+        if (!this._shutdown) {
+            if (this._cancel) {
+                Ui.log("info", "Process cancelled.");
+            } else {
+                Ui.log("info", "Process complete.");
+            }
+
+            if (typeof this._nstg !== "undefined") {
+                this._nstg.cleanup();
+            }
+            if (typeof this._nsapi !== "undefined") {
+                this._nsapi.cleanup();
+            }
+
+            Ui.handleFinish();
+
+            this._shutdown = true;
+        }
+    }
+
+    private static onTgSuccess(recipient: Recipient) {
+        Ui.log("info", `Sent telegram to ${recipient.nation}.`);
+        Ui.handleTgSuccess(recipient.nation);
+    }
+
+    private onTgFailure(recipient: Recipient) {
+        Ui.log("error", `Failed to send telegram to ${recipient.nation}.`);
+        if (this._verbose) {
+            Ui.log("error", util.inspect(recipient.status.err));
+        }
+    }
+
+    private static onNewRecipients(recipients: Recipient[]) {
+        Ui.log(
+            "info",
+            `Sending telegrams to the following additional nations:`
+            + ` ${recipients.map(r => r.nation)}`);
     }
 
     /**
@@ -171,9 +222,12 @@ export default class App {
      * Resets the app.
      */
     private reset() {
+        this._nsapi = undefined;
         this._nstg = undefined;
+        this._verbose = false;
         this._cancel = false;
         this._pause = false;
+        this._shutdown = false;
         this._jobId = "-1";
     }
 }

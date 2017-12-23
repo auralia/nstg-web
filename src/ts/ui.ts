@@ -179,12 +179,12 @@ export default class Ui {
             const rateLimit = localStorage.getItem("rateLimit");
             switch (rateLimit) {
                 case "0":
-                    $("rateLimitRecruitment").prop(
+                    $("#rateLimitRecruitment").prop(
                         "checked",
                         true);
                     break;
                 case "1":
-                    $("rateLimitNonRecruitment").prop(
+                    $("#rateLimitNonRecruitment").prop(
                         "checked",
                         true);
                     break;
@@ -398,10 +398,12 @@ export default class Ui {
      * Handler called when a telegram is sent and autoAddPastRecipients is true.
      */
     public static handleTgSuccess(recipient: string): void {
-        const recipientsInput = $("recipients");
-        let trl = String(recipientsInput.val());
-        trl += `\nnations [${recipient}];`;
-        recipientsInput.val(trl);
+        if ($("#autoAddPastRecipients").is(":checked")) {
+            const recipientsInput = $("#recipients");
+            let trl = String(recipientsInput.val());
+            trl += `\n-nations [${recipient}];`;
+            recipientsInput.val(trl);
+        }
     }
 
     /**
