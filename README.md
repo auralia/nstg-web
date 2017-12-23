@@ -6,8 +6,7 @@ language called Telegram Recipient Language.
 
 nstg-web features the following:
 
-* ability to send telegrams to complex sets of nations defined using TRL or to
-  simple lists of nations
+* ability to send telegrams to complex sets of nations defined using TRL
 * a continuous mode that periodically updates the recipients list with new
   nations that match the provided TRL string, which is useful for recruitment 
   purposes
