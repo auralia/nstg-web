@@ -63,7 +63,8 @@ export default class App {
         this._nsapi = new NsApi(
             `nstg-web (maintained by Auralia, currently`
             + ` used by "${userAgent}")`,
-            true);
+            true,
+            1200); // 1200 instead of 600 due to OPTIONS requests
         this._nstg = new NsTgApi(this._nsapi, clientKey);
 
         this._nstg.onJobStart = jobId => {
